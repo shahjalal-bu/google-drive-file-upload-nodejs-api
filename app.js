@@ -1,14 +1,17 @@
 const { google } = require("googleapis");
 const express = require("express");
-const fs = require("fs");
 const app = express();
 const Multer = require("multer");
 const cors = require("cors");
+const { Readable } = require("stream");
 require("dotenv").config();
-;
-
 app.use(cors());
-
+const bufferToStream = (buffer) => {
+  const stream = new Readable();
+  stream.push(buffer);
+  stream.push(null);
+  return stream;
+};
 async function uploadFile(file) {
   try {
     const auth = new google.auth.GoogleAuth({
@@ -25,7 +28,8 @@ async function uploadFile(file) {
     };
     const media = {
       mimeType: file.mimetype,
-      body: fs.createReadStream(file.path),
+      // body: fs.createReadStream(file.path),
+      body:bufferToStream(file.buffer)
     };
     const res = await driveService.files.create({
       resource: fileMetaData,
@@ -38,28 +42,15 @@ async function uploadFile(file) {
   }
 }
 
-const deleteFile = (filePath) => {
-  fs.unlink(filePath, () => {
-    console.log("file deleted");
-  });
-};
-
-
 // // https://drive.google.com/uc?id=1vHfiuJTa7sfQrOAAc2sR5msZYfOMYB5o
 
 const port = process.env.PORT || 3000;
 
 // Set up the storage for the uploaded files
 const multer = Multer({
-  storage: Multer.diskStorage({
+  storage: Multer.memoryStorage({
     destination: function (req, file, callback) {
-      callback(null, `${__dirname}/audio-files`);
-    },
-    filename: function (req, file, callback) {
-      callback(
-        null,
-        file.fieldname + "_" + Date.now() + "_" + file.originalname
-      );
+      callback(null, "");
     },
   }),
   limits: {
@@ -73,7 +64,6 @@ app.post("/upload", multer.single("file"), async (req, res) => {
   const file = req.file;
   console.log(file);
   const response = await uploadFile(file);
-  deleteFile(req.file.path);
   res.status(200).json({ response });
 });
 
